@@ -1,0 +1,25 @@
+# deps & build
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# generated Prisma client
+src/generated
+
+# env (all of them, including .env.example and .env.test)
+.env
+.env.*
+
+# logs & OS
+*.log
+.DS_Store
+
+# IDE
+.idea
+.vscode/*
+!.vscode/settings.json
+
+# Claude Code (local AI assistant files)
+.claude/
+CLAUDE.md

@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// What a person does in Cebi. Null until they finish onboarding in the app.
+enum UserRole {
+  CREATOR
+  BUSINESS
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  /// Supabase Auth user id (the token's "sub"; auth.users.id in Supabase).
+  authId      String     @unique @map("auth_id") @db.Uuid
+  /// Copied from the sign-in token. Not unique here: Supabase Auth already
+  /// enforces one account per email.
+  email       String?
+  /// E.164 (+639171234567) when they signed up with a mobile number.
+  phone       String?
+  name        String?
+  avatarUrl   String?    @map("avatar_url")
+  role        UserRole?
+  status      UserStatus @default(ACTIVE)
+  /// Set when sign-up is finished (role and profile saved). Null means the
+  /// app should send them back to the last sign-up steps.
+  onboardedAt DateTime?  @map("onboarded_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  creatorProfile  CreatorProfile?
+  businessProfile BusinessProfile?
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@map("users")
+}
+
+/// Social networks a creator can post on.
+enum SocialPlatform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE
+  FACEBOOK
+}
+
+/// Filled in during sign-up when the user joins as a creator.
+model CreatorProfile {
+  userId    String           @id @map("user_id") @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Main social handle without the "@", stored lowercase.
+  handle    String?          @unique
+  city      String?
+  platforms SocialPlatform[]
+  /// Niche ids from the onboarding options (food, travel, ...).
+  niches    String[]
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@map("creator_profiles")
+}
+
+/// Filled in during sign-up when the user joins as a business. The business
+/// name is the user's name.
+model BusinessProfile {
+  userId    String   @id @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city      String
+  /// Category id from the onboarding options (restaurant, cafe, ...).
+  category  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([city])
+  @@index([category])
+  @@map("business_profiles")
+}

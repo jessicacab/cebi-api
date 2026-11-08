@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: cebi
+      POSTGRES_PASSWORD: cebi
+      POSTGRES_DB: cebi
+    ports:
+      - "5433:5432"
+    volumes:
+      - cebi-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cebi"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  cebi-db:

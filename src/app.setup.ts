@@ -1,7 +1,9 @@
 import { INestApplication, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import express from 'express';
 import helmet from 'helmet';
+import { join } from 'node:path';
 import type { Env } from './config/env.js';
 
 /** Shared by main.ts and the e2e tests so both run the same app. */
@@ -15,7 +17,11 @@ export const configureApp = (app: INestApplication) => {
     app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
   }
 
-  app.use(helmet());
+  // Images are shown by the admin, which runs on another origin.
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // Pictures that ship with the API (content type previews), at /static/...
+  // Same folder from src/ and dist/.
+  app.use('/static', express.static(join(import.meta.dirname, '..', 'public'), { maxAge: '1d' }));
   // Only the admin CRM runs in a browser; the mobile app doesn't need CORS.
   app.enableCors({ origin: config.get('CORS_ORIGINS', { infer: true }) });
 

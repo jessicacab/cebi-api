@@ -116,7 +116,8 @@ describe('Cebi API (e2e)', () => {
     await prisma.user.update({ where: { authId: idFor('boss') }, data: { role: 'ADMIN' } });
 
     const res = await request(app.getHttpServer())
-      .get('/v1/admin/users?role=CREATOR&pageSize=5')
+      // search keeps creators from other test files (running at the same time) off the page.
+      .get('/v1/admin/users?role=CREATOR&pageSize=5&search=maya@example.com')
       .set(as('boss'))
       .expect(200);
     expect(res.body.meta).toMatchObject({ page: 1, pageSize: 5 });

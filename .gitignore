@@ -23,3 +23,9 @@ src/generated
 # Claude Code (local AI assistant files)
 .claude/
 CLAUDE.md
+
+# local scratch (failed video uploads kept in development)
+tmp/
+
+# downloaded models (cut-out)
+.cache/

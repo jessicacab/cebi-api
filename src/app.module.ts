@@ -5,8 +5,11 @@ import { AuthModule } from './auth/auth.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { validateEnv } from './config/env.js';
+import { CampaignsModule } from './modules/campaigns/campaigns.module.js';
+import { ContentTypesModule } from './modules/content-types/content-types.module.js';
 import { AuthRoutesModule } from './modules/auth/auth-routes.module.js';
 import { HealthController } from './modules/health/health.controller.js';
+import { StudioModule } from './modules/studio/studio.module.js';
 import { OnboardingModule } from './modules/onboarding/onboarding.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -26,6 +29,9 @@ import { PrismaModule } from './prisma/prisma.module.js';
     UsersModule,
     AuthRoutesModule,
     OnboardingModule,
+    ContentTypesModule,
+    CampaignsModule,
+    StudioModule,
     // New feature modules go here (campaigns, collabs, payments, ...).
   ],
   controllers: [HealthController],

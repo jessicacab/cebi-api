@@ -40,6 +40,9 @@ model User {
 
   creatorProfile  CreatorProfile?
   businessProfile BusinessProfile?
+  campaigns       Campaign[]
+  applications    CampaignApplication[]
+  mediaJobs       MediaJob[]
 
   @@index([email])
   @@index([phone])
@@ -79,10 +82,285 @@ model BusinessProfile {
   city      String
   /// Category id from the onboarding options (restaurant, cafe, ...).
   category  String
+  /// The business's real logo (PNG with a clear background works best). Used on
+  /// motion end cards and to check ads show only this brand. Never drawn by AI.
+  logoUrl   String?  @map("logo_url")
+  ownerFirstName String? @map("owner_first_name")
+  ownerLastName  String? @map("owner_last_name")
+  /// Contact for the Cebi team and, later, approved creators. Not the sign-in contact.
+  contactMobile  String? @map("contact_mobile")
+  contactEmail   String? @map("contact_email")
+  landline       String?
+  street         String?
+  barangay       String?
+  /// How creators find the door ("Across the barangay hall, blue gate").
+  landmark       String?
+  latitude       Float?
+  longitude      Float?
+  /// Handles the business typed: { tiktok, facebook, instagram, youtube }.
+  socials        Json?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([city])
   @@index([category])
   @@map("business_profiles")
+}
+
+/// The kinds of campaign a business can post (Sponsored Content, UGC, ...).
+/// Managed by the Cebi team from the admin; the app reads the active ones.
+model ContentType {
+  id                    String           @id @default(uuid()) @db.Uuid
+  /// Stable id for code and analytics (sponsored-content, ugc, ...). Never changes.
+  slug                  String           @unique
+  name                  String
+  /// What the creator does, shown under the name.
+  description           String
+  /// One short example, shown as "e.g. ...".
+  example               String
+  /// Preview picture: a full URL, or a path on this API such as
+  /// /static/content-types/ugc.jpg.
+  imageUrl              String?          @map("image_url")
+  /// What Cebi suggests each creator makes when this type is picked. The
+  /// business can change it. Lengths are for videos only:
+  /// [{ "format": "VIDEO", "count": 1, "minSeconds": 30, "maxSeconds": 60 }]
+  deliverables          Json             @default("[]")
+  /// Suggested campaign length; the app fills in the end date with it.
+  defaultDurationDays   Int              @default(14) @map("default_duration_days")
+  /// How creators are usually paid for this type: FIXED, COMMISSION,
+  /// PRODUCT (free product or service) or HYBRID (cash plus product).
+  defaultPayment        String           @default("FIXED") @map("default_payment")
+  /// Platforms this type works on. The app only offers it when every
+  /// platform the business picked is in this list.
+  platforms             SocialPlatform[] @default([TIKTOK, INSTAGRAM, YOUTUBE, FACEBOOK])
+  /// Creators come to the business, so the campaign asks for visit times.
+  requiresVisit         Boolean          @default(false) @map("requires_visit")
+  /// False when the creator only hands over the videos (UGC), so post rules
+  /// such as tags and "keep live" do not apply.
+  postsOnCreatorAccount Boolean          @default(true) @map("posts_on_creator_account")
+  /// Lower comes first in the app.
+  sortOrder             Int              @default(0) @map("sort_order")
+  /// Hidden from businesses when false. Types are never deleted, because
+  /// campaigns point at them.
+  active                Boolean          @default(true)
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  campaigns Campaign[]
+
+  @@index([active, sortOrder])
+  @@map("content_types")
+}
+
+/// DRAFT: saved, only the business sees it. LIVE: creators can see it and
+/// ask to join. PAUSED and ENDED come later.
+enum CampaignStatus {
+  DRAFT
+  LIVE
+  PAUSED
+  ENDED
+}
+
+/// How creators are paid. PRODUCT is a free product or service; HYBRID
+/// combines two or more of the others (see the nullable amounts).
+enum PaymentKind {
+  FIXED
+  COMMISSION
+  PRODUCT
+  HYBRID
+}
+
+/// A campaign a business posts. Created as a DRAFT from the app's "Create
+/// campaign" steps, then published.
+model Campaign {
+  id            String         @id @default(uuid()) @db.Uuid
+  businessId    String         @map("business_id") @db.Uuid
+  business      User           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  contentTypeId String         @map("content_type_id") @db.Uuid
+  contentType   ContentType    @relation(fields: [contentTypeId], references: [id])
+  status        CampaignStatus @default(DRAFT)
+  title         String
+  /// Cover photo in Supabase Storage. Null: the app shows the content type's picture.
+  coverUrl      String?        @map("cover_url")
+
+  // 1 to 3: where and what
+  platforms    SocialPlatform[]
+  /// [{ "format": "VIDEO", "count": 4, "minSeconds": 30, "maxSeconds": 60 }]
+  deliverables Json
+  /// Optional performance targets for the whole campaign, each a range:
+  /// { "impressions": { "min": 10000, "max": 50000 }, "ctr": { "min": 1.5 } }.
+  /// Keys: impressions, reach, clicks, conversions (counts), cpc (pesos),
+  /// ctr (percent). Null when the business set none.
+  goals        Json?
+
+  // 4 Requirements
+  hashtags      String[]
+  /// Creators must tag the business's account.
+  tagBusiness   Boolean  @default(true) @map("tag_business")
+  /// Other accounts to mention, with the "@".
+  mentions      String[]
+  talkingPoints String[] @map("talking_points")
+  avoid         String[]
+  /// Product link or promo code.
+  link          String?
+  showLocation  Boolean  @default(false) @map("show_location")
+  reviewDrafts  Boolean  @default(false) @map("review_drafts")
+  /// Rounds of changes the business can ask for when it reviews drafts.
+  revisions     Int      @default(0)
+  /// How long posts stay up. Null when creators don't post (UGC).
+  keepLiveDays  Int?     @map("keep_live_days")
+  /// How long the business may use the content in its own ads. Null: not allowed.
+  adUsageDays   Int?     @map("ad_usage_days")
+
+  // 5 Compensation (amounts in whole pesos)
+  payment        PaymentKind
+  cashPerCreator Int?        @map("cash_per_creator")
+  commissionPct  Int?        @map("commission_pct")
+  product        String?
+  productValue   Int?        @map("product_value")
+  slots          Int
+
+  // 6 Timeline (calendar days)
+  applyBy      DateTime  @map("apply_by") @db.Date
+  contentDue   DateTime  @map("content_due") @db.Date
+  /// Null when creators don't post (UGC).
+  publishStart DateTime? @map("publish_start") @db.Date
+  publishEnd   DateTime? @map("publish_end") @db.Date
+  spreadEvenly Boolean   @default(false) @map("spread_evenly")
+  visitTimes   String[]  @map("visit_times")
+
+  publishedAt  DateTime?             @map("published_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  applications CampaignApplication[]
+  pieces       CreatorDeliverable[]
+
+  @@index([businessId, status])
+  @@index([status, applyBy])
+  @@map("campaigns")
+}
+
+/// PENDING until the business decides. APPROVED takes one of the campaign's slots.
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+/// A creator asking to join a live campaign. One per creator per campaign.
+model CampaignApplication {
+  id         String               @id @default(uuid()) @db.Uuid
+  campaignId String               @map("campaign_id") @db.Uuid
+  campaign   Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId  String               @map("creator_id") @db.Uuid
+  creator    User                 @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  status     ApplicationStatus    @default(PENDING)
+  /// Optional message from the creator to the business.
+  note       String?
+  /// The visit time the creator picked from the campaign's visitTimes.
+  visitTime  String?              @map("visit_time")
+  decidedAt  DateTime?            @map("decided_at")
+  /// Stage 1: the business marks the creator paid after approving all their content.
+  paidAt     DateTime?            @map("paid_at")
+  pieces     CreatorDeliverable[]
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+
+  @@unique([campaignId, creatorId])
+  @@index([campaignId, status])
+  @@index([creatorId])
+  @@map("campaign_applications")
+}
+
+/// TODO: not sent yet. SUBMITTED: waiting for the business. CHANGES_REQUESTED:
+/// the creator has to fix it. APPROVED: done.
+enum DeliverableStatus {
+  TODO
+  SUBMITTED
+  CHANGES_REQUESTED
+  APPROVED
+}
+
+/// One piece an approved creator owes, e.g. "video 2 of 4 on TikTok".
+/// Created from the campaign's deliverables when the creator is approved.
+model CreatorDeliverable {
+  id            String              @id @default(uuid()) @db.Uuid
+  applicationId String              @map("application_id") @db.Uuid
+  application   CampaignApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  campaignId    String              @map("campaign_id") @db.Uuid
+  campaign      Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  /// VIDEO or PHOTO.
+  format        String
+  /// Null when creators don't post (UGC).
+  platform      SocialPlatform?
+  /// 1, 2, 3 within the same format and platform.
+  number        Int
+  minSeconds    Int?                @map("min_seconds")
+  maxSeconds    Int?                @map("max_seconds")
+  status        DeliverableStatus   @default(TODO)
+  /// Link to the post, or to the file for UGC and drafts.
+  contentUrl    String?             @map("content_url")
+  /**
+   * When contentUrl is an AI-enhanced photo: the creator's original, for the business to compare.
+   */
+  originalUrl   String?             @map("original_url")
+  /**
+   * True when the sent photo was made with Enhance (shown as "AI-enhanced").
+   */
+  aiEnhanced    Boolean             @default(false) @map("ai_enhanced")
+  caption       String?
+  submittedAt   DateTime?           @map("submitted_at")
+  /// What the business asked to change, last time.
+  feedback      String?
+  revisionsUsed Int                 @default(0) @map("revisions_used")
+  approvedAt    DateTime?           @map("approved_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@index([applicationId])
+  @@index([campaignId, status])
+  @@map("creator_deliverables")
+}
+
+/// POLISH: crop, color and subtitles on the creator's own video (no AI
+/// generation). ANIMATE: a short AI clip made from a real product photo.
+enum MediaJobKind {
+  POLISH
+  ANIMATE
+  /// Moving ad from a photo: 3 motion design variations (no AI generation).
+  MOTION
+}
+
+enum MediaJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// Video work that takes longer than a request, run by the API in the
+/// background. The app checks GET /v1/studio/jobs/:id until DONE or FAILED.
+model MediaJob {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The piece it is for (creators).
+  pieceId   String?        @map("piece_id") @db.Uuid
+  kind      MediaJobKind
+  status    MediaJobStatus @default(QUEUED)
+  /// What the creator chose: look, fit, subtitles (POLISH) or motion (ANIMATE).
+  options   Json           @default("{}")
+  /// ANIMATE: the photo it started from.
+  inputUrl  String?        @map("input_url")
+  outputUrl String?        @map("output_url")
+  /// Readable reason when FAILED.
+  error     String?
+  /// MOTION: [{ key, template, name, status, storyboardUrl, outputUrl, error }].
+  variants  Json?
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("media_jobs")
 }

@@ -23,6 +23,19 @@ export class CreatorProfileDto {
 export class BusinessProfileDto {
   @ApiProperty() city: string;
   @ApiProperty({ description: 'Category id from /v1/onboarding/options' }) category: string;
+  @ApiProperty({ type: String, nullable: true, description: 'Real logo file, used on motion end cards and brand checks' })
+  logoUrl: string | null;
+  @ApiProperty({ type: String, nullable: true }) ownerFirstName: string | null;
+  @ApiProperty({ type: String, nullable: true }) ownerLastName: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'E.164; the app shows the sign-in phone when empty' }) contactMobile: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'The app shows the sign-in email when empty' }) contactEmail: string | null;
+  @ApiProperty({ type: String, nullable: true }) landline: string | null;
+  @ApiProperty({ type: String, nullable: true }) street: string | null;
+  @ApiProperty({ type: String, nullable: true }) barangay: string | null;
+  @ApiProperty({ type: String, nullable: true }) landmark: string | null;
+  @ApiProperty({ type: Number, nullable: true }) latitude: number | null;
+  @ApiProperty({ type: Number, nullable: true }) longitude: number | null;
+  @ApiProperty({ type: Object, nullable: true, example: { tiktok: '@lolanenacebu' } }) socials: Record<string, string> | null;
 }
 
 /** Shape returned for a user (documents the API; the DB record is sent as-is). */
